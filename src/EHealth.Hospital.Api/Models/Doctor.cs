@@ -6,5 +6,6 @@ public class Doctor
     public string FirstName { get; set; } = default!;
     public string LastName { get; set; } = default!;
     public string Specialty { get; set; } = default!;
-    public string? CredentialUal { get; set; }  // DKG UAL of the published credential asset
+    public string LicenseNumber { get; set; } = default!;
+    public string? CredentialUal { get; set; }
 }

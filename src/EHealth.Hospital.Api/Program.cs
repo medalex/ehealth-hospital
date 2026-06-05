@@ -28,13 +28,10 @@ using (var scope = app.Services.CreateScope())
 app.UseCors();
 app.UseSwagger();
 app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Hospital API v1"));
-app.UseDefaultFiles();
-app.UseStaticFiles();
-
 DoctorEndpoints.Map(app);
 AllergyEndpoints.Map(app);
 PrescriptionEndpoints.Map(app);
 
-app.MapFallbackToFile("index.html");
-
 app.Run();
+
+public partial class Program { }

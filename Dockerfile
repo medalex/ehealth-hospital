@@ -1,22 +1,14 @@
-# ── Stage 1: Build React frontend ────────────────────────────────────────────
-FROM node:22-alpine AS frontend
-WORKDIR /app/ClientApp
-COPY ClientApp/package*.json ./
-RUN npm ci
-COPY ClientApp/ ./
-RUN npm run build
-
-# ── Stage 2: Build .NET app ───────────────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY *.csproj ./
-RUN dotnet restore
-COPY . ./
-COPY --from=frontend /app/ClientApp/dist ./wwwroot
-RUN dotnet publish -c Release -o /out
 
-# ── Stage 3: Runtime ──────────────────────────────────────────────────────────
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+COPY src/EHealth.Hospital.Api/EHealth.Hospital.Api.csproj EHealth.Hospital.Api/
+RUN dotnet restore EHealth.Hospital.Api/EHealth.Hospital.Api.csproj
+
+COPY src/EHealth.Hospital.Api/ EHealth.Hospital.Api/
+RUN dotnet publish EHealth.Hospital.Api/EHealth.Hospital.Api.csproj \
+    -c Release -o /out --no-restore
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 COPY --from=build /out ./
 EXPOSE 3003

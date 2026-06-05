@@ -16,6 +16,7 @@ public static class Seeder
             FirstName = "Ivan",
             LastName = "Petrenko",
             Specialty = "General Practitioner",
+            LicenseNumber = "MED-LIC-2024-001",
             CredentialUal = null  // set after DKG registration
         });
 

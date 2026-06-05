@@ -19,6 +19,15 @@ public static class PrescriptionEndpoints
                 ? Results.Ok(p)
                 : Results.NotFound());
 
+        group.MapDelete("/{id:guid}", async (Guid id, AppDbContext db) =>
+        {
+            var prescription = await db.Prescriptions.FindAsync(id);
+            if (prescription is null) return Results.NotFound();
+            db.Prescriptions.Remove(prescription);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
         // Main endpoint: create prescription → triggers ZKP proof generation
         group.MapPost("/", async (CreatePrescriptionRequest req, AppDbContext db,
             IHttpClientFactory http, IConfiguration config) =>
@@ -43,8 +52,8 @@ public static class PrescriptionEndpoints
             var proofRequest = new ZkpProveRequest(
                 DoctorCredentialUal: doctor.CredentialUal,
                 PatientId: req.PatientId,
-                DrugIds: req.DrugIds,
-                Dosages: req.Dosages,
+                DrugIds: [req.DrugId],
+                Dosages: [req.Dosage],
                 PatientAge: req.PatientAge,
                 WorkflowId: req.WorkflowId,
                 Allergies: allergies.Select(a => a.Substance).ToArray(),
@@ -60,8 +69,8 @@ public static class PrescriptionEndpoints
                 Id = Guid.NewGuid(),
                 DoctorId = req.DoctorId,
                 PatientId = req.PatientId,
-                DrugIds = req.DrugIds,
-                Dosages = req.Dosages,
+                DrugId = req.DrugId,
+                Dosage = req.Dosage,
                 Outcome = zkpResult?.Outcome,
                 StmtHash = zkpResult?.StmtHash,
                 ProofJson = zkpResult is not null ? JsonSerializer.Serialize(zkpResult.Proof) : null,
@@ -121,7 +130,7 @@ public static class PrescriptionEndpoints
     // DTOs for inter-service communication
     private record CreatePrescriptionRequest(
         Guid DoctorId, Guid PatientId,
-        int[] DrugIds, int[] Dosages,
+        int DrugId, string Dosage,
         int PatientAge, int WorkflowId);
 
     private record LabResultDto(
@@ -136,7 +145,7 @@ public static class PrescriptionEndpoints
 
     private record ZkpProveRequest(
         string DoctorCredentialUal, Guid PatientId,
-        int[] DrugIds, int[] Dosages, int PatientAge, int WorkflowId,
+        int[] DrugIds, string[] Dosages, int PatientAge, int WorkflowId,
         string[] Allergies, LabResultDto[] LabResults, PolicyDto[] Policies);
 
     private record ZkpResult(bool Outcome, string StmtHash, object Proof);
