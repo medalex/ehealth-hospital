@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Hospital System</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body{background:#f0f4f8;font-size:.92rem}
+    .topbar{background:#1a3a5c;color:#fff;padding:.6rem 1.2rem;display:flex;align-items:center;gap:1rem}
+    .topbar h1{font-size:1.1rem;margin:0;font-weight:600;letter-spacing:.5px}
+    .topbar .badge-role{background:#2e7db8;font-size:.7rem;padding:.3em .6em;border-radius:4px}
+    .sidebar{background:#fff;border-right:1px solid #dde3ea;min-height:calc(100vh - 44px);width:260px;flex-shrink:0;padding:1rem}
+    .main{flex:1;padding:1.4rem;overflow-y:auto}
+    .layout{display:flex}
+    .card-section{background:#fff;border-radius:8px;border:1px solid #dde3ea;margin-bottom:1.2rem;overflow:hidden}
+    .card-section .cs-header{background:#f7f9fc;border-bottom:1px solid #dde3ea;padding:.55rem 1rem;font-weight:600;font-size:.85rem;color:#1a3a5c}
+    .cs-body{padding:1rem}
+    .cred-badge{display:inline-block;padding:.2em .55em;border-radius:4px;font-size:.72rem;font-weight:600}
+    .cred-ok{background:#d4edda;color:#155724}
+    .cred-no{background:#fff3cd;color:#856404}
+    .outcome-pass{color:#155724;font-weight:600}
+    .outcome-fail{color:#721c24;font-weight:600}
+    table{font-size:.82rem}
+    .mono{font-family:monospace;font-size:.75rem}
+    label{font-size:.82rem;font-weight:500;margin-bottom:.2rem}
+    .btn-primary{background:#1a3a5c;border-color:#1a3a5c}
+    .btn-primary:hover{background:#2e7db8;border-color:#2e7db8}
+  </style>
+</head>
+<body>
+<div class="topbar">
+  <h1>🏥 Hospital Clinical System</h1>
+  <span class="badge-role">Doctor Workstation</span>
+  <span id="doctorName" class="ms-auto text-white-50 small"></span>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="mb-3">
+      <div class="small text-muted fw-600 mb-2">DOCTOR ON DUTY</div>
+      <div id="doctorCard" class="p-2 rounded bg-light border"></div>
+    </div>
+    <hr>
+    <div class="small text-muted fw-600 mb-2">QUICK ACTIONS</div>
+    <button class="btn btn-outline-secondary btn-sm w-100 mb-2" onclick="showSection('rx')">New Prescription</button>
+    <button class="btn btn-outline-secondary btn-sm w-100 mb-2" onclick="loadPrescriptions()">Refresh List</button>
+    <hr>
+    <div class="small text-muted">Patient ID</div>
+    <input id="sidebar-pid" class="form-control form-control-sm mt-1" placeholder="Paste patient UUID">
+    <button class="btn btn-outline-primary btn-sm w-100 mt-1" onclick="usePatient()">Use for Prescription</button>
+  </div>
+
+  <div class="main">
+
+    <!-- DOCTOR CREDENTIAL -->
+    <div class="card-section" id="credSection">
+      <div class="cs-header">Doctor DKG Credential</div>
+      <div class="cs-body" id="credBody">Loading…</div>
+    </div>
+
+    <!-- NEW PRESCRIPTION -->
+    <div class="card-section" id="rxSection">
+      <div class="cs-header">Create Prescription with ZKP Proof</div>
+      <div class="cs-body">
+        <div class="row g-3">
+          <div class="col-md-3">
+            <label>Doctor</label>
+            <select id="rx-doctor" class="form-select form-select-sm"></select>
+          </div>
+          <div class="col-md-3">
+            <label>Patient ID</label>
+            <input id="rx-patient" class="form-control form-control-sm" placeholder="UUID">
+          </div>
+          <div class="col-md-2">
+            <label>Drug</label>
+            <select id="rx-drug" class="form-select form-select-sm">
+              <option value="101">101 Ibuprofen</option>
+              <option value="102">102 Aspirin</option>
+              <option value="103">103 Penicillin ⚠</option>
+              <option value="104">104 Paracetamol</option>
+            </select>
+          </div>
+          <div class="col-md-1">
+            <label>Dosage</label>
+            <input id="rx-dosage" class="form-control form-control-sm" value="8">
+          </div>
+          <div class="col-md-1">
+            <label>Age</label>
+            <input id="rx-age" class="form-control form-control-sm" type="number" value="12">
+          </div>
+          <div class="col-md-2">
+            <label>Workflow ID</label>
+            <input id="rx-wf" class="form-control form-control-sm" type="number" value="77">
+          </div>
+        </div>
+        <div class="mt-3 d-flex gap-2 align-items-center">
+          <button class="btn btn-primary btn-sm" onclick="createPrescription()">
+            Sign &amp; Generate ZKP Proof
+          </button>
+          <span id="rx-spin" class="d-none text-muted small">
+            <span class="spinner-border spinner-border-sm me-1"></span>Generating proof (10–30s)…
+          </span>
+        </div>
+        <div id="rx-msg" class="mt-2"></div>
+      </div>
+    </div>
+
+    <!-- PRESCRIPTIONS LIST -->
+    <div class="card-section">
+      <div class="cs-header d-flex justify-content-between align-items-center">
+        Prescriptions
+        <button class="btn btn-outline-secondary btn-sm" onclick="loadPrescriptions()">Refresh</button>
+      </div>
+      <div class="cs-body p-0">
+        <table class="table table-hover table-sm mb-0">
+          <thead class="table-light">
+            <tr><th>Date</th><th>Drug</th><th>Dosage</th><th>Patient</th><th>ZKP</th><th>stmtHash</th><th></th></tr>
+          </thead>
+          <tbody id="rx-list"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const API = '';
+const DRUGS = {101:'Ibuprofen',102:'Aspirin',103:'Penicillin',104:'Paracetamol'};
+const PHARMACY_URL = 'http://localhost:3004';
+
+async function get(path){ const r=await fetch(API+path); return r.json(); }
+async function post(path,body){ const r=await fetch(API+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); if(!r.ok){const t=await r.text();throw new Error(t);} return r.json(); }
+
+function msg(id,html,type='success'){document.getElementById(id).innerHTML=`<div class="alert alert-${type} p-2 small mb-0">${html}</div>`;}
+
+async function loadDoctors(){
+  const docs = await get('/api/doctors');
+  const sel = document.getElementById('rx-doctor');
+  sel.innerHTML = '';
+  const card = document.getElementById('doctorCard');
+  const doc = docs[0];
+  if(!doc){card.textContent='No doctors'; return;}
+  sel.innerHTML = docs.map(d=>`<option value="${d.id}">${d.firstName} ${d.lastName}</option>`).join('');
+  const hasCred = !!doc.credentialUal;
+  card.innerHTML = `
+    <div class="fw-600">${doc.firstName} ${doc.lastName}</div>
+    <div class="text-muted small">${doc.specialty}</div>
+    <div class="text-muted small">Lic: ${doc.licenseNumber}</div>
+    <div class="mt-1">
+      <span class="cred-badge ${hasCred?'cred-ok':'cred-no'}">${hasCred?'✓ DKG Registered':'⚠ Not Registered'}</span>
+    </div>`;
+  document.getElementById('credBody').innerHTML = hasCred
+    ? `<div class="d-flex align-items-center gap-2">
+         <span class="cred-badge cred-ok">✓ Credential registered on DKG</span>
+         <span class="mono text-muted">${doc.credentialUal?.slice(0,40)}…</span>
+       </div>`
+    : `<div class="d-flex align-items-center gap-3">
+         <span class="cred-badge cred-no">⚠ Credential not yet registered</span>
+         <button class="btn btn-sm btn-warning" onclick="registerCred('${doc.id}')">Register on DKG</button>
+       </div>`;
+}
+
+async function registerCred(id){
+  try{
+    await post(`/api/doctors/${id}/register-credential`, {});
+    msg('rx-msg','Credential registered successfully on DKG');
+    loadDoctors();
+  }catch(e){msg('rx-msg',e.message,'danger');}
+}
+
+async function loadPrescriptions(){
+  const rows = await get('/api/prescriptions');
+  const tb = document.getElementById('rx-list');
+  if(!rows.length){tb.innerHTML='<tr><td colspan="7" class="text-center text-muted py-3">No prescriptions yet</td></tr>';return;}
+  tb.innerHTML = rows.map(r=>`
+    <tr>
+      <td>${new Date(r.createdAt).toLocaleDateString()}</td>
+      <td>${DRUGS[r.drugId]||r.drugId}</td>
+      <td>${r.dosage} mg</td>
+      <td class="mono" title="${r.patientId}">${r.patientId?.slice(0,8)}…</td>
+      <td>${r.outcome===true?'<span class="outcome-pass">✓ PASS</span>':r.outcome===false?'<span class="outcome-fail">✗ FAIL</span>':'<span class="text-muted">—</span>'}</td>
+      <td class="mono text-muted">${r.stmtHash?r.stmtHash.slice(0,12)+'…':'—'}</td>
+      <td>
+        ${r.outcome?`<button class="btn btn-outline-success btn-sm" onclick='sendToPharmacy(${JSON.stringify(r).replace(/'/g,"&#39;")})'>→ Pharmacy</button>`:''}
+      </td>
+    </tr>`).join('');
+}
+
+async function createPrescription(){
+  const spin=document.getElementById('rx-spin');
+  spin.classList.remove('d-none');
+  document.getElementById('rx-msg').innerHTML='';
+  try{
+    const rx = await post('/api/prescriptions',{
+      doctorId: document.getElementById('rx-doctor').value,
+      patientId: document.getElementById('rx-patient').value,
+      drugId: parseInt(document.getElementById('rx-drug').value),
+      dosage: document.getElementById('rx-dosage').value,
+      patientAge: parseInt(document.getElementById('rx-age').value),
+      workflowId: parseInt(document.getElementById('rx-wf').value),
+    });
+    const pass = rx.outcome===true;
+    msg('rx-msg',`
+      Prescription created — ZKP outcome: <strong>${pass?'✓ PASS':'✗ FAIL'}</strong><br>
+      stmtHash: <span class="mono">${rx.stmtHash?.slice(0,24)}…</span>
+      ${pass?`<button class="btn btn-sm btn-outline-success ms-2" onclick='sendToPharmacy(${JSON.stringify(rx).replace(/'/g,"&#39;")})'>→ Send to Pharmacy</button>`:''}
+    `, pass?'success':'warning');
+    loadPrescriptions();
+  }catch(e){msg('rx-msg',e.message,'danger');}
+  finally{spin.classList.add('d-none');}
+}
+
+async function sendToPharmacy(rx){
+  if(typeof rx==='string') rx=JSON.parse(rx);
+  const DRUGS2={101:'Ibuprofen',102:'Aspirin',103:'Penicillin',104:'Paracetamol'};
+  try{
+    const received = await fetch(`${PHARMACY_URL}/api/prescriptions/receive`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        drugId: rx.drugId,
+        drugName: DRUGS2[rx.drugId]||'Unknown',
+        dosage: rx.dosage,
+        patientId: rx.patientId,
+        stmtHash: rx.stmtHash||'',
+        proofJson: rx.proofJson||'{}',
+        publicSignalsJson: rx.publicSignalsJson||'[]',
+        outcome: rx.outcome||false,
+      })
+    });
+    if(!received.ok) throw new Error(await received.text());
+    msg('rx-msg','Prescription sent to Pharmacy ✓');
+  }catch(e){msg('rx-msg','Pharmacy: '+e.message,'danger');}
+}
+
+function usePatient(){
+  document.getElementById('rx-patient').value = document.getElementById('sidebar-pid').value;
+}
+
+loadDoctors();
+loadPrescriptions();
+</script>
+</body>
+</html>

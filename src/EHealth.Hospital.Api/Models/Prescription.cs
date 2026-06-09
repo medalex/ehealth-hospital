@@ -10,5 +10,6 @@ public class Prescription
     public bool? Outcome { get; set; }           // ZKP result: true=accept, false=reject
     public string? StmtHash { get; set; }        // Poseidon commitment
     public string? ProofJson { get; set; }       // serialised Groth16 proof
+    public string? PublicSignalsJson { get; set; } // serialised public signals array
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

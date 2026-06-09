@@ -74,6 +74,7 @@ public static class PrescriptionEndpoints
                 Outcome = zkpResult?.Outcome,
                 StmtHash = zkpResult?.StmtHash,
                 ProofJson = zkpResult is not null ? JsonSerializer.Serialize(zkpResult.Proof) : null,
+                PublicSignalsJson = zkpResult?.PublicSignals is not null ? JsonSerializer.Serialize(zkpResult.PublicSignals) : null,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -148,5 +149,5 @@ public static class PrescriptionEndpoints
         int[] DrugIds, string[] Dosages, int PatientAge, int WorkflowId,
         string[] Allergies, LabResultDto[] LabResults, PolicyDto[] Policies);
 
-    private record ZkpResult(bool Outcome, string StmtHash, object Proof);
+    private record ZkpResult(bool Outcome, string StmtHash, object Proof, string[]? PublicSignals);
 }
