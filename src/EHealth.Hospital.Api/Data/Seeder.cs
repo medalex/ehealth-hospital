@@ -13,8 +13,8 @@ public static class Seeder
         db.Doctors.Add(new Doctor
         {
             Id = Guid.Parse("00000000-0000-0000-0002-000000000001"),
-            FirstName = "Ivan",
-            LastName = "Petrenko",
+            FirstName = "James",
+            LastName = "Wilson",
             Specialty = "General Practitioner",
             LicenseNumber = "MED-LIC-2024-001",
             CredentialUal = null  // set after DKG registration
@@ -26,7 +26,7 @@ public static class Seeder
             PatientId = Pat1,
             Substance = "Penicillin",
             SnomedCode = "372687004",
-            Source = "City Hospital",
+            Source = "St. Mary's Hospital",
             RecordedAt = DateTime.UtcNow.AddMonths(-3)
         });
 
