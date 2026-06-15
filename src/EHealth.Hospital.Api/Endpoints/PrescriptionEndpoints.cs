@@ -37,6 +37,13 @@ public static class PrescriptionEndpoints
             if (doctor.CredentialUal is null)
                 return Results.BadRequest("Doctor credential not registered on DKG");
 
+            // Проверяем consent пациента на доступ госпиталя к его данным
+            var orgId = config["HospitalId"] ?? "hospital-1";
+            if (!await CheckConsent(req.PatientId, orgId, http, config))
+                return Results.Json(
+                    new { error = $"Patient {req.PatientId} has not granted consent to {orgId}" },
+                    statusCode: 403);
+
             // Fetch patient allergies from local DB
             var allergies = await db.AllergyRecords
                 .Where(a => a.PatientId == req.PatientId)
@@ -83,6 +90,20 @@ public static class PrescriptionEndpoints
 
             return Results.Created($"/api/prescriptions/{prescription.Id}", prescription);
         });
+    }
+
+    private static async Task<bool> CheckConsent(
+        Guid patientId, string organizationId, IHttpClientFactory http, IConfiguration config)
+    {
+        try
+        {
+            var patientApiUrl = config["PatientApiUrl"] ?? "http://patient-api:3001";
+            var client = http.CreateClient();
+            var resp = await client.GetAsync(
+                $"{patientApiUrl}/api/consents/check?patientId={patientId}&organizationId={organizationId}");
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
     }
 
     private static async Task<LabResultDto[]> FetchLabResults(
