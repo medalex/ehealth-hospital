@@ -106,11 +106,53 @@ public static class PrescriptionEndpoints
         {
             var mfssiaUrl = config["MfssiaUrl"] ?? "http://mfssia-ehealth:4000/api";
             var client = http.CreateClient();
-            var resp = await client.GetFromJsonAsync<MfssiaResponse<PolicyDto[]>>(
+
+            // Реальная структура ответа: { success, data: { data: [...] } }
+            var root = await client.GetFromJsonAsync<JsonElement>(
                 $"{mfssiaUrl}/rx-governance/policies");
-            return resp?.Data ?? [];
+
+            if (!root.TryGetProperty("data", out var outer) ||
+                !outer.TryGetProperty("data", out var inner) ||
+                inner.ValueKind != JsonValueKind.Array)
+                return [];
+
+            return inner.EnumerateArray()
+                .Select(p =>
+                {
+                    // medication нет отдельным полем — извлекаем из id: "urn:rx:policy:pol:metformin-egfr"
+                    var id = GetStr(p, "id").ToLowerInvariant();
+                    var med = id.Contains("metformin") ? "metformin"
+                            : id.Contains("penicillin") ? "penicillin"
+                            : "";
+
+                    return new PolicyDto(
+                        MedicationCode: med,
+                        ClinicalCondition: CleanRdf(GetStr(p, "clinicalCondition")),
+                        ComparisonOperator: CleanRdf(GetStr(p, "comparisonOperator")),
+                        Threshold: decimal.TryParse(
+                            CleanRdf(GetStr(p, "threshold")),
+                            System.Globalization.NumberStyles.Any,
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            out var t) ? t : 0m
+                    );
+                })
+                .Where(p => !string.IsNullOrEmpty(p.MedicationCode))
+                .ToArray();
         }
         catch { return []; }
+    }
+
+    // Возвращает строковое значение свойства JsonElement или ""
+    private static string GetStr(JsonElement el, string prop) =>
+        el.TryGetProperty(prop, out var v) ? v.GetString() ?? "" : "";
+
+    // Очищает RDF-значения: "\"30\"^^xsd:decimal" → "30", "\"eGFR\"" → "eGFR"
+    private static string CleanRdf(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        var idx = s.IndexOf("^^", StringComparison.Ordinal);
+        if (idx >= 0) s = s[..idx];
+        return s.Trim('"');
     }
 
     private static async Task<ZkpResult?> CallZkpProver(
@@ -141,8 +183,6 @@ public static class PrescriptionEndpoints
     private record PolicyDto(
         string MedicationCode, string ClinicalCondition,
         string ComparisonOperator, decimal Threshold);
-
-    private record MfssiaResponse<T>(bool Success, T? Data);
 
     private record ZkpProveRequest(
         string DoctorCredentialUal, Guid PatientId,
