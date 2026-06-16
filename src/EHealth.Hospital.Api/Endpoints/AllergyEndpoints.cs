@@ -10,6 +10,9 @@ public static class AllergyEndpoints
     {
         var group = app.MapGroup("/api/allergies").WithTags("Allergies");
 
+        group.MapGet("/", async (AppDbContext db) =>
+            await db.AllergyRecords.OrderByDescending(a => a.RecordedAt).ToListAsync());
+
         group.MapGet("/patient/{patientId:guid}", async (Guid patientId, AppDbContext db) =>
             await db.AllergyRecords
                 .Where(a => a.PatientId == patientId)
