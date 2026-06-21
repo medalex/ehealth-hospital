@@ -52,7 +52,7 @@ public class PrescriptionEndpointsTests : IDisposable
     }
 
     [Fact]
-    public async Task PostPrescription_DoctorWithoutCredential_ReturnsBadRequest()
+    public async Task PostPrescription_DoctorNotInMfssiaRegistry_ReturnsForbidden()
     {
         var doctors = await _client.GetFromJsonAsync<List<Doctor>>("/api/doctors");
         var doctorId = doctors![0].Id;
@@ -69,7 +69,8 @@ public class PrescriptionEndpointsTests : IDisposable
 
         var response = await _client.PostAsJsonAsync("/api/prescriptions", request);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        // MFSSIA недоступна в тестах → FetchCredentialProofFromMfssia возвращает null → 403
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
