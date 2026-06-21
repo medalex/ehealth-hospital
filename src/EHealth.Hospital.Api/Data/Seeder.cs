@@ -10,15 +10,35 @@ public static class Seeder
     {
         if (db.Doctors.Any()) return;
 
-        db.Doctors.Add(new Doctor
-        {
-            Id = Guid.Parse("00000000-0000-0000-0002-000000000001"),
-            FirstName = "James",
-            LastName = "Wilson",
-            Specialty = "General Practitioner",
-            LicenseNumber = "MED-LIC-2024-001",
-            CredentialUal = Environment.GetEnvironmentVariable("SEED_DOCTOR_UAL")
-        });
+        db.Doctors.AddRange(
+            new Doctor
+            {
+                Id = Guid.Parse("00000000-0000-0000-0002-000000000001"),
+                FirstName = "James",
+                LastName = "Wilson",
+                Specialty = "General Practitioner",
+                LicenseNumber = "MED-LIC-2024-001",
+                CredentialUal = Environment.GetEnvironmentVariable("SEED_DOCTOR_UAL")
+            },
+            new Doctor
+            {
+                Id = Guid.Parse("00000000-0000-0000-0002-000000000002"),
+                FirstName = "Sarah",
+                LastName = "Chen",
+                Specialty = "Endocrinologist",
+                LicenseNumber = "MED-LIC-2024-002",
+                CredentialUal = null
+            },
+            new Doctor
+            {
+                Id = Guid.Parse("00000000-0000-0000-0002-000000000003"),
+                FirstName = "Michael",
+                LastName = "Roberts",
+                Specialty = "Pulmonologist",
+                LicenseNumber = "MED-LIC-2024-003",
+                CredentialUal = null
+            }
+        );
 
         db.AllergyRecords.Add(new AllergyRecord
         {

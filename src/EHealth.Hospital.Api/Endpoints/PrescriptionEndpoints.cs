@@ -56,9 +56,17 @@ public static class PrescriptionEndpoints
             // Fetch ZKP public params (clinical policies) from mfssia-ehealth
             var policies = await FetchPolicies(http, config);
 
+            // Получаем канонический credential hash врача из реестра МФССИА
+            var credentialHash = await FetchCredentialHashFromMfssia(req.DoctorId, http, config);
+            if (credentialHash is null)
+                return Results.Json(
+                    new { error = $"Doctor {req.DoctorId} not found in MFSSIA physician registry" },
+                    statusCode: 403);
+
             // Build ZKP proof request
             var proofRequest = new ZkpProveRequest(
                 DoctorCredentialUal: doctor.CredentialUal,
+                DoctorCredentialHash: credentialHash,
                 PatientId: req.PatientId,
                 DrugIds: [req.DrugId],
                 Dosages: [req.Dosage],
@@ -177,6 +185,21 @@ public static class PrescriptionEndpoints
         return s.Trim('"');
     }
 
+    // Запрашивает канонический credential hash врача из реестра МФССИА
+    private static async Task<string?> FetchCredentialHashFromMfssia(
+        Guid doctorId, IHttpClientFactory http, IConfiguration config)
+    {
+        try
+        {
+            var mfssiaUrl = config["MfssiaUrl"] ?? "http://mfssia-ehealth:4000/api";
+            var client = http.CreateClient();
+            var resp = await client.GetFromJsonAsync<JsonElement>(
+                $"{mfssiaUrl}/physician-registry/{doctorId}");
+            return resp.TryGetProperty("credentialHash", out var h) ? h.GetString() : null;
+        }
+        catch { return null; }
+    }
+
     private static async Task<ZkpResult?> CallZkpProver(
         ZkpProveRequest req, IHttpClientFactory http, IConfiguration config)
     {
@@ -207,8 +230,8 @@ public static class PrescriptionEndpoints
         string ComparisonOperator, decimal Threshold);
 
     private record ZkpProveRequest(
-        string DoctorCredentialUal, Guid PatientId,
-        int[] DrugIds, string[] Dosages, int PatientAge, int WorkflowId,
+        string DoctorCredentialUal, string? DoctorCredentialHash,
+        Guid PatientId, int[] DrugIds, string[] Dosages, int PatientAge, int WorkflowId,
         string[] Allergies, LabResultDto[] LabResults, PolicyDto[] Policies);
 
     private record ZkpResult(bool Outcome, string StmtHash, object Proof, string[]? PublicSignals);
