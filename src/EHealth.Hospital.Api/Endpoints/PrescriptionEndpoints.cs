@@ -56,9 +56,9 @@ public static class PrescriptionEndpoints
             // Fetch ZKP public params (clinical policies) from mfssia-ehealth
             var policies = await FetchPolicies(http, config);
 
-            // Получаем канонический credential hash врача из реестра МФССИА
-            var credentialHash = await FetchCredentialHashFromMfssia(req.DoctorId, http, config);
-            if (credentialHash is null)
+            // Получаем Merkle proof врача из реестра МФССИА (credential hash + siblings + pathBits + root)
+            var credProof = await FetchCredentialProofFromMfssia(req.DoctorId, http, config);
+            if (credProof is null)
                 return Results.Json(
                     new { error = $"Doctor {req.DoctorId} not found in MFSSIA physician registry" },
                     statusCode: 403);
@@ -66,7 +66,10 @@ public static class PrescriptionEndpoints
             // Build ZKP proof request
             var proofRequest = new ZkpProveRequest(
                 DoctorCredentialUal: doctor.CredentialUal,
-                DoctorCredentialHash: credentialHash,
+                DoctorCredentialHash: credProof.CredentialHash,
+                ValidCredentialRoot: credProof.ValidCredentialRoot,
+                CredentialSiblings: credProof.Siblings,
+                CredentialPathBits: credProof.PathBits,
                 PatientId: req.PatientId,
                 DrugIds: [req.DrugId],
                 Dosages: [req.Dosage],
@@ -185,17 +188,32 @@ public static class PrescriptionEndpoints
         return s.Trim('"');
     }
 
-    // Запрашивает канонический credential hash врача из реестра МФССИА
-    private static async Task<string?> FetchCredentialHashFromMfssia(
+    // Запрашивает Merkle proof врача из реестра МФССИА:
+    // credential hash + siblings + pathBits для ZKP circuit + корень дерева
+    private static async Task<CredentialProof?> FetchCredentialProofFromMfssia(
         Guid doctorId, IHttpClientFactory http, IConfiguration config)
     {
         try
         {
             var mfssiaUrl = config["MfssiaUrl"] ?? "http://mfssia-ehealth:4000/api";
             var client = http.CreateClient();
-            var resp = await client.GetFromJsonAsync<JsonElement>(
-                $"{mfssiaUrl}/physician-registry/{doctorId}");
-            return resp.TryGetProperty("credentialHash", out var h) ? h.GetString() : null;
+
+            var proof = await client.GetFromJsonAsync<JsonElement>(
+                $"{mfssiaUrl}/physician-registry/{doctorId}/merkle-proof");
+            var rootResp = await client.GetFromJsonAsync<JsonElement>(
+                $"{mfssiaUrl}/physician-registry/merkle-root");
+
+            if (!proof.TryGetProperty("credentialHash", out var hash)) return null;
+            if (!proof.TryGetProperty("siblings", out var sibs)) return null;
+            if (!proof.TryGetProperty("pathBits", out var bits)) return null;
+            if (!rootResp.TryGetProperty("root", out var root)) return null;
+
+            return new CredentialProof(
+                CredentialHash: hash.GetString()!,
+                ValidCredentialRoot: root.GetString()!,
+                Siblings: sibs.EnumerateArray().Select(s => s.GetString()!).ToArray(),
+                PathBits: bits.EnumerateArray().Select(b => b.GetInt32()).ToArray()
+            );
         }
         catch { return null; }
     }
@@ -229,8 +247,13 @@ public static class PrescriptionEndpoints
         string MedicationCode, string ClinicalCondition,
         string ComparisonOperator, decimal Threshold);
 
+    private record CredentialProof(
+        string CredentialHash, string ValidCredentialRoot,
+        string[] Siblings, int[] PathBits);
+
     private record ZkpProveRequest(
         string DoctorCredentialUal, string? DoctorCredentialHash,
+        string? ValidCredentialRoot, string[]? CredentialSiblings, int[]? CredentialPathBits,
         Guid PatientId, int[] DrugIds, string[] Dosages, int PatientAge, int WorkflowId,
         string[] Allergies, LabResultDto[] LabResults, PolicyDto[] Policies);
 
