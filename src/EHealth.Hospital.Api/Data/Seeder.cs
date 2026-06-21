@@ -38,7 +38,7 @@ public static class Seeder
                 LicenseNumber = "MED-LIC-2024-003",
                 CredentialUal = null
             },
-            // Врач есть в БД больницы, но НЕТ в реестре МФССИА — для демо блокировки
+            // Doctor exists in hospital DB but NOT in MFSSIA registry — for blocking demo
             new Doctor
             {
                 Id = Guid.Parse("00000000-0000-0000-0002-000000000099"),

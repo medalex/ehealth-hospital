@@ -36,7 +36,7 @@ public static class PrescriptionEndpoints
             if (doctor is null)
                 return Results.BadRequest(new { error = "Doctor not found" });
 
-            // Проверяем consent пациента на доступ госпиталя к его данным
+            // Check patient consent for hospital data access
             var orgId = config["HospitalId"] ?? "hospital-1";
             if (!await CheckConsent(req.PatientId, orgId, http, config))
                 return Results.Json(
@@ -54,7 +54,7 @@ public static class PrescriptionEndpoints
             // Fetch ZKP public params (clinical policies) from mfssia-ehealth
             var policies = await FetchPolicies(http, config);
 
-            // Получаем Merkle proof врача из реестра МФССИА (credential hash + siblings + pathBits + root)
+            // Fetch physician Merkle proof from MFSSIA registry (credential hash + siblings + pathBits + root)
             var credProof = await FetchCredentialProofFromMfssia(req.DoctorId, http, config);
             if (credProof is null)
                 return Results.Json(
@@ -138,7 +138,7 @@ public static class PrescriptionEndpoints
             var mfssiaUrl = config["MfssiaUrl"] ?? "http://mfssia-ehealth:4000/api";
             var client = http.CreateClient();
 
-            // Реальная структура ответа: { success, data: { data: [...] } }
+            // Actual response structure: { success, data: { data: [...] } }
             var root = await client.GetFromJsonAsync<JsonElement>(
                 $"{mfssiaUrl}/rx-governance/policies");
 
@@ -150,7 +150,7 @@ public static class PrescriptionEndpoints
             return inner.EnumerateArray()
                 .Select(p =>
                 {
-                    // medication нет отдельным полем — извлекаем из id: "urn:rx:policy:pol:metformin-egfr"
+                    // medication has no dedicated field — extracted from id: "urn:rx:policy:pol:metformin-egfr"
                     var id = GetStr(p, "id").ToLowerInvariant();
                     var med = id.Contains("metformin") ? "metformin"
                             : id.Contains("penicillin") ? "penicillin"
@@ -173,11 +173,11 @@ public static class PrescriptionEndpoints
         catch { return []; }
     }
 
-    // Возвращает строковое значение свойства JsonElement или ""
+    // Returns string value of a JsonElement property, or ""
     private static string GetStr(JsonElement el, string prop) =>
         el.TryGetProperty(prop, out var v) ? v.GetString() ?? "" : "";
 
-    // Очищает RDF-значения: "\"30\"^^xsd:decimal" → "30", "\"eGFR\"" → "eGFR"
+    // Strips RDF-typed literals: "\"30\"^^xsd:decimal" → "30", "\"eGFR\"" → "eGFR"
     private static string CleanRdf(string s)
     {
         if (string.IsNullOrEmpty(s)) return s;
@@ -186,8 +186,8 @@ public static class PrescriptionEndpoints
         return s.Trim('"');
     }
 
-    // Запрашивает Merkle proof врача из реестра МФССИА:
-    // credential hash + siblings + pathBits для ZKP circuit + корень дерева
+    // Fetches physician Merkle proof from MFSSIA registry:
+    // credential hash + siblings + pathBits for the ZKP circuit + tree root
     private static async Task<CredentialProof?> FetchCredentialProofFromMfssia(
         Guid doctorId, IHttpClientFactory http, IConfiguration config)
     {

@@ -69,7 +69,7 @@ public class PrescriptionEndpointsTests : IDisposable
 
         var response = await _client.PostAsJsonAsync("/api/prescriptions", request);
 
-        // MFSSIA недоступна в тестах → FetchCredentialProofFromMfssia возвращает null → 403
+        // MFSSIA unreachable in tests → FetchCredentialProofFromMfssia returns null → 403
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
