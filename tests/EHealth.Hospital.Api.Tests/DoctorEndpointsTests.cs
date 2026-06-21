@@ -23,8 +23,10 @@ public class DoctorEndpointsTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var doctors = await response.Content.ReadFromJsonAsync<List<Doctor>>();
         Assert.NotNull(doctors);
-        Assert.Single(doctors);
-        Assert.Equal("Wilson", doctors[0].LastName);
+        Assert.Equal(3, doctors.Count);
+        Assert.Contains(doctors, d => d.LastName == "Wilson");
+        Assert.Contains(doctors, d => d.LastName == "Chen");
+        Assert.Contains(doctors, d => d.LastName == "Roberts");
     }
 
     [Fact]
