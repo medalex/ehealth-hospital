@@ -73,6 +73,7 @@ public static class PrescriptionEndpoints
                 Dosages: [req.Dosage],
                 PatientAge: req.PatientAge,
                 WorkflowId: req.WorkflowId,
+                PrescriptionIssuedAt: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                 Allergies: allergies.Select(a => a.Substance).ToArray(),
                 LabResults: labResults,
                 Policies: policies
@@ -253,6 +254,7 @@ public static class PrescriptionEndpoints
         string DoctorCredentialUal, string? DoctorCredentialHash,
         string? ValidCredentialRoot, string[]? CredentialSiblings, int[]? CredentialPathBits,
         Guid PatientId, int[] DrugIds, string[] Dosages, int PatientAge, int WorkflowId,
+        long PrescriptionIssuedAt,
         string[] Allergies, LabResultDto[] LabResults, PolicyDto[] Policies);
 
     private record ZkpResult(bool Outcome, string StmtHash, object Proof, string[]? PublicSignals);
