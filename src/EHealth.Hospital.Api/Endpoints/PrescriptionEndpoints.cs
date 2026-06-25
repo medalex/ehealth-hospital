@@ -36,12 +36,12 @@ public static class PrescriptionEndpoints
             if (doctor is null)
                 return Results.BadRequest(new { error = "Doctor not found" });
 
-            // Check patient consent for hospital data access
-            var orgId = config["HospitalId"] ?? "hospital-1";
-            if (!await CheckConsent(req.PatientId, orgId, http, config))
-                return Results.Json(
-                    new { error = $"Patient {req.PatientId} has not granted consent to {orgId}" },
-                    statusCode: 403);
+            // MFSSIA physician-access gate (ConsentAccessSet, ALL_MANDATORY):
+            //   C-DOC-AUTH  — physician authenticated (in registry)
+            //   C-DOC-AUTHZ — patient consent in DKG covers physician's organization
+            var access = await CheckPhysicianAccess(req.DoctorId, req.PatientId, http, config);
+            if (!access.Access)
+                return Results.Json(new { error = access.Reason }, statusCode: 403);
 
             // Fetch patient allergies from local DB
             var allergies = await db.AllergyRecords
@@ -103,19 +103,32 @@ public static class PrescriptionEndpoints
         });
     }
 
-    private static async Task<bool> CheckConsent(
-        Guid patientId, string organizationId, IHttpClientFactory http, IConfiguration config)
+    // Runs the MFSSIA ConsentAccessSet gate for the physician↔patient pair.
+    // Returns access=false (with a reason) when MFSSIA is unreachable or either challenge fails.
+    private static async Task<AccessDecision> CheckPhysicianAccess(
+        Guid doctorId, Guid patientId, IHttpClientFactory http, IConfiguration config)
     {
         try
         {
-            var patientApiUrl = config["PatientApiUrl"] ?? "http://patient-api:3001";
+            var mfssiaUrl = config["MfssiaUrl"] ?? "http://mfssia-ehealth:4000/api";
             var client = http.CreateClient();
-            var resp = await client.GetAsync(
-                $"{patientApiUrl}/api/consents/check?patientId={patientId}&organizationId={organizationId}");
-            return resp.IsSuccessStatusCode;
+            var resp = await client.PostAsJsonAsync(
+                $"{mfssiaUrl}/physician-access/check",
+                new { doctorId = doctorId.ToString(), patientId = patientId.ToString() });
+
+            if (!resp.IsSuccessStatusCode)
+                return new AccessDecision(false, $"MFSSIA access check unavailable (HTTP {(int)resp.StatusCode})");
+
+            var decision = await resp.Content.ReadFromJsonAsync<AccessDecision>();
+            return decision ?? new AccessDecision(false, "MFSSIA returned no access decision");
         }
-        catch { return false; }
+        catch (Exception e)
+        {
+            return new AccessDecision(false, $"MFSSIA access gate unreachable: {e.Message}");
+        }
     }
+
+    private record AccessDecision(bool Access, string Reason);
 
     private static async Task<LabResultDto[]> FetchLabResults(
         Guid patientId, IHttpClientFactory http, IConfiguration config)
