@@ -261,9 +261,11 @@ public static class PrescriptionEndpoints
         int DrugId, string Dosage,
         int PatientAge, int WorkflowId);
 
+    // Formula is intentionally omitted: lab-api serializes it as a numeric enum,
+    // which broke string deserialization and silently emptied the lab list.
     private record LabResultDto(
         string LoincCode, string Metric,
-        string Formula, decimal Value, string Unit);
+        decimal Value, string Unit, DateTime MeasuredAt);
 
     private record PolicyDto(
         string MedicationCode, string ClinicalCondition,
