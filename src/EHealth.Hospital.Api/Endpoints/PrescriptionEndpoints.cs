@@ -119,8 +119,14 @@ public static class PrescriptionEndpoints
             if (!resp.IsSuccessStatusCode)
                 return new AccessDecision(false, $"MFSSIA access check unavailable (HTTP {(int)resp.StatusCode})");
 
-            var decision = await resp.Content.ReadFromJsonAsync<AccessDecision>();
-            return decision ?? new AccessDecision(false, "MFSSIA returned no access decision");
+            // MFSSIA wraps the decision: { success, message, data: { access, authz, reason, ... } }
+            var root = await resp.Content.ReadFromJsonAsync<JsonElement>();
+            if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+                return new AccessDecision(false, "MFSSIA returned no access decision");
+
+            var access = data.TryGetProperty("access", out var a) && a.ValueKind == JsonValueKind.True;
+            var reason = data.TryGetProperty("reason", out var r) ? r.GetString() : null;
+            return new AccessDecision(access, reason ?? (access ? "" : "access denied by MFSSIA gate"));
         }
         catch (Exception e)
         {
@@ -210,15 +216,19 @@ public static class PrescriptionEndpoints
             var mfssiaUrl = config["MfssiaUrl"] ?? "http://mfssia-ehealth:4000/api";
             var client = http.CreateClient();
 
-            var proof = await client.GetFromJsonAsync<JsonElement>(
+            var proofResp = await client.GetFromJsonAsync<JsonElement>(
                 $"{mfssiaUrl}/physician-registry/{doctorId}/merkle-proof");
             var rootResp = await client.GetFromJsonAsync<JsonElement>(
                 $"{mfssiaUrl}/physician-registry/merkle-root");
 
+            // MFSSIA wraps payloads: { success, message, data: {...} }
+            if (!proofResp.TryGetProperty("data", out var proof) || proof.ValueKind != JsonValueKind.Object) return null;
+            if (!rootResp.TryGetProperty("data", out var rootData) || rootData.ValueKind != JsonValueKind.Object) return null;
+
             if (!proof.TryGetProperty("credentialHash", out var hash)) return null;
             if (!proof.TryGetProperty("siblings", out var sibs)) return null;
             if (!proof.TryGetProperty("pathBits", out var bits)) return null;
-            if (!rootResp.TryGetProperty("root", out var root)) return null;
+            if (!rootData.TryGetProperty("root", out var root)) return null;
 
             return new CredentialProof(
                 CredentialHash: hash.GetString()!,
