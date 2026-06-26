@@ -62,8 +62,12 @@ public static class PrescriptionEndpoints
                     statusCode: 403);
 
             // Fetch the patient-record Merkle proof from MFSSIA (allergy tree built from DKG,
-            // leaf bound to patientId). Null → prover falls back to the local allergy list.
+            // leaf bound to patientId). MFSSIA is authoritative — required, no local fallback.
             var recordProof = await FetchPatientRecordProof(req.PatientId, http, config);
+            if (recordProof is null)
+                return Results.Json(
+                    new { error = "MFSSIA patient-record registry unavailable — cannot anchor patient allergies" },
+                    statusCode: 503);
 
             // Build ZKP proof request
             var proofRequest = new ZkpProveRequest(
@@ -79,12 +83,12 @@ public static class PrescriptionEndpoints
                 WorkflowId: req.WorkflowId,
                 PrescriptionIssuedAt: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                 Allergies: allergies.Select(a => a.Substance).ToArray(),
-                Substances: recordProof?.Substances,
-                PatientRecordRoot: recordProof?.PatientRecordRoot,
-                RefLeaf: recordProof?.RefLeaf,
-                RefSiblings: recordProof?.RefSiblings,
-                RefPathBits: recordProof?.RefPathBits,
-                RefIsActive: recordProof?.RefIsActive,
+                Substances: recordProof.Substances,
+                PatientRecordRoot: recordProof.PatientRecordRoot,
+                RefLeaf: recordProof.RefLeaf,
+                RefSiblings: recordProof.RefSiblings,
+                RefPathBits: recordProof.RefPathBits,
+                RefIsActive: recordProof.RefIsActive,
                 LabResults: labResults,
                 Policies: policies
             );
