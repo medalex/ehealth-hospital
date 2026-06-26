@@ -150,16 +150,30 @@ public static class PrescriptionEndpoints
 
     private record AccessDecision(bool Access, string Reason);
 
+    // Lab measurements are read from the DKG graph via MFSSIA (rx:LabResult), not from
+    // lab-api directly, so the value the ZKP uses comes from a queryable DKG source.
     private static async Task<LabResultDto[]> FetchLabResults(
         Guid patientId, IHttpClientFactory http, IConfiguration config)
     {
         try
         {
-            var labUrl = config["LabServiceUrl"] ?? "http://lab:3002";
+            var mfssiaUrl = config["MfssiaUrl"] ?? "http://mfssia-ehealth:4000/api";
             var client = http.CreateClient();
-            var results = await client.GetFromJsonAsync<LabResultDto[]>(
-                $"{labUrl}/api/results/patient/{patientId}");
-            return results ?? [];
+            var root = await client.GetFromJsonAsync<JsonElement>($"{mfssiaUrl}/lab-record/{patientId}");
+
+            // MFSSIA wraps payloads: { success, data: [ { metric, value, measuredAt } ] }
+            if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+                return [];
+
+            return data.EnumerateArray().Select(m => new LabResultDto(
+                LoincCode: "",
+                Metric: m.TryGetProperty("metric", out var me) ? me.GetString() ?? "" : "",
+                Value: m.TryGetProperty("value", out var va) && va.TryGetDecimal(out var dec) ? dec : 0m,
+                Unit: "",
+                MeasuredAt: m.TryGetProperty("measuredAt", out var ma)
+                    && ma.ValueKind == JsonValueKind.String
+                    && DateTime.TryParse(ma.GetString(), out var dt) ? dt : default
+            )).ToArray();
         }
         catch { return []; }
     }
