@@ -223,7 +223,12 @@ public static class PrescriptionEndpoints
                             CleanRdf(GetStr(p, "threshold")),
                             System.Globalization.NumberStyles.Any,
                             System.Globalization.CultureInfo.InvariantCulture,
-                            out var t) ? t : 0m
+                            out var t) ? t : 0m,
+                        DeltaMax: decimal.TryParse(
+                            CleanRdf(GetStr(p, "deltaMax")),
+                            System.Globalization.NumberStyles.Any,
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            out var dm) ? dm : 0m
                     );
                 })
                 .Where(p => !string.IsNullOrEmpty(p.MedicationCode))
@@ -358,7 +363,7 @@ public static class PrescriptionEndpoints
 
     private record PolicyDto(
         string MedicationCode, string ClinicalCondition,
-        string ComparisonOperator, decimal Threshold);
+        string ComparisonOperator, decimal Threshold, decimal DeltaMax);
 
     private record CredentialProof(
         string CredentialHash, string ValidCredentialRoot,
