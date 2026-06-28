@@ -48,8 +48,12 @@ public static class PrescriptionEndpoints
                 .Where(a => a.PatientId == req.PatientId)
                 .ToListAsync();
 
-            // Fetch lab results from lab service
-            var labResults = await FetchLabResults(req.PatientId, http, config);
+            // Fetch lab record (root + membership proofs) from the MFSSIA lab-record registry.
+            var lab = await FetchLabResults(req.PatientId, http, config);
+            if (lab is null)
+                return Results.Json(
+                    new { error = "MFSSIA lab-record registry unavailable" },
+                    statusCode: 503);
 
             // Fetch ZKP public params (clinical policies) from mfssia-ehealth
             var policies = await FetchPolicies(http, config);
@@ -100,7 +104,8 @@ public static class PrescriptionEndpoints
                 RefIsActive: recordProof.RefIsActive,
                 ContraindicationRoot: contra.ContraindicationRoot,
                 ContraProofs: contra.ContraProofs,
-                LabResults: labResults,
+                LabRecordRoot: lab.LabRecordRoot,
+                LabResults: lab.Results,
                 Policies: policies
             );
 
@@ -161,9 +166,10 @@ public static class PrescriptionEndpoints
 
     private record AccessDecision(bool Access, string Reason);
 
-    // Lab measurements are read from the DKG graph via MFSSIA (rx:LabResult), not from
-    // lab-api directly, so the value the ZKP uses comes from a queryable DKG source.
-    private static async Task<LabResultDto[]> FetchLabResults(
+    // Lab measurements + Merkle proofs are read from the DKG-backed MFSSIA lab-record
+    // registry, so the value the ZKP uses is bound to the committed lab record.
+    // Null → MFSSIA unavailable. Returns a valid (possibly empty) record otherwise.
+    private static async Task<LabRecordBundle?> FetchLabResults(
         Guid patientId, IHttpClientFactory http, IConfiguration config)
     {
         try
@@ -172,21 +178,29 @@ public static class PrescriptionEndpoints
             var client = http.CreateClient();
             var root = await client.GetFromJsonAsync<JsonElement>($"{mfssiaUrl}/lab-record/{patientId}");
 
-            // MFSSIA wraps payloads: { success, data: [ { metric, value, measuredAt } ] }
-            if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
-                return [];
+            // MFSSIA wraps payloads: { success, data: { labRecordRoot, measurements: [...] } }
+            if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+                return null;
+            if (!data.TryGetProperty("labRecordRoot", out var rootEl)) return null;
 
-            return data.EnumerateArray().Select(m => new LabResultDto(
-                LoincCode: "",
-                Metric: m.TryGetProperty("metric", out var me) ? me.GetString() ?? "" : "",
-                Value: m.TryGetProperty("value", out var va) && va.TryGetDecimal(out var dec) ? dec : 0m,
-                Unit: "",
-                MeasuredAt: m.TryGetProperty("measuredAt", out var ma)
-                    && ma.ValueKind == JsonValueKind.String
-                    && DateTime.TryParse(ma.GetString(), out var dt) ? dt : default
-            )).ToArray();
+            var measurements = data.TryGetProperty("measurements", out var ms) && ms.ValueKind == JsonValueKind.Array
+                ? ms.EnumerateArray().Select(m => new LabResultDto(
+                    Metric: m.TryGetProperty("metric", out var me) ? me.GetString() ?? "" : "",
+                    MetricId: m.TryGetProperty("metricId", out var mi) ? mi.GetString() ?? "0" : "0",
+                    Value: m.TryGetProperty("value", out var va) && va.TryGetDecimal(out var dec) ? dec : 0m,
+                    MeasuredAt: m.TryGetProperty("measuredAt", out var ma)
+                        && ma.ValueKind == JsonValueKind.String
+                        && DateTime.TryParse(ma.GetString(), out var dt) ? dt : default,
+                    Siblings: m.TryGetProperty("siblings", out var sb) && sb.ValueKind == JsonValueKind.Array
+                        ? sb.EnumerateArray().Select(x => x.GetString()!).ToArray() : Array.Empty<string>(),
+                    PathBits: m.TryGetProperty("pathBits", out var pb) && pb.ValueKind == JsonValueKind.Array
+                        ? pb.EnumerateArray().Select(x => x.GetInt32()).ToArray() : Array.Empty<int>()
+                )).ToArray()
+                : Array.Empty<LabResultDto>();
+
+            return new LabRecordBundle(rootEl.GetString() ?? "", measurements);
         }
-        catch { return []; }
+        catch { return null; }
     }
 
     private static async Task<PolicyDto[]> FetchPolicies(
@@ -354,12 +368,12 @@ public static class PrescriptionEndpoints
         int DrugId, string Dosage,
         int PatientAge, int WorkflowId);
 
-    // Formula is intentionally omitted: lab-api serializes it as a numeric enum,
-    // which broke string deserialization and silently emptied the lab list.
-    // Public so the lab-api JSON contract can be regression-tested.
+    // Lab measurement + lab-record membership proof from the MFSSIA lab-record registry.
     public record LabResultDto(
-        string LoincCode, string Metric,
-        decimal Value, string Unit, DateTime MeasuredAt);
+        string Metric, string MetricId, decimal Value, DateTime MeasuredAt,
+        string[] Siblings, int[] PathBits);
+
+    private record LabRecordBundle(string LabRecordRoot, LabResultDto[] Results);
 
     private record PolicyDto(
         string MedicationCode, string ClinicalCondition,
@@ -378,7 +392,7 @@ public static class PrescriptionEndpoints
         string[]? Substances, string? PatientRecordRoot,
         string[]? RefLeaf, string[][]? RefSiblings, int[][]? RefPathBits, int[]? RefIsActive,
         string? ContraindicationRoot, ContraProof[]? ContraProofs,
-        LabResultDto[] LabResults, PolicyDto[] Policies);
+        string? LabRecordRoot, LabResultDto[] LabResults, PolicyDto[] Policies);
 
     private record PatientRecordProof(
         string[] Substances, int[] SubstanceIds, string PatientRecordRoot,
