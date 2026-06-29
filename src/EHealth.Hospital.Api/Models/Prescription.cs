@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace EHealth.Hospital.Models;
 
 public class Prescription
@@ -12,4 +14,9 @@ public class Prescription
     public string? ProofJson { get; set; }       // serialised Groth16 proof
     public string? PublicSignalsJson { get; set; } // serialised public signals array
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    // Prescribing-side diagnostic: WHY a proof was rejected. Returned with the create
+    // response only (not persisted, not in the proof/public signals).
+    [NotMapped]
+    public string[]? Reasons { get; set; }
 }

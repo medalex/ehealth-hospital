@@ -123,7 +123,8 @@ public static class PrescriptionEndpoints
                 StmtHash = zkpResult?.StmtHash,
                 ProofJson = zkpResult is not null ? JsonSerializer.Serialize(zkpResult.Proof) : null,
                 PublicSignalsJson = zkpResult?.PublicSignals is not null ? JsonSerializer.Serialize(zkpResult.PublicSignals) : null,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                Reasons = zkpResult?.Reasons
             };
 
             db.Prescriptions.Add(prescription);
@@ -405,5 +406,5 @@ public static class PrescriptionEndpoints
 
     private record ContraindicationBundle(string ContraindicationRoot, ContraProof[] ContraProofs);
 
-    private record ZkpResult(bool Outcome, string StmtHash, object Proof, string[]? PublicSignals);
+    private record ZkpResult(bool Outcome, string StmtHash, object Proof, string[]? PublicSignals, string[]? Reasons);
 }
